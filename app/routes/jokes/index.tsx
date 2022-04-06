@@ -1,7 +1,10 @@
 import {db} from "~/utils/db.server";
-import {json, useLoaderData} from "remix";
+import {json, LoaderFunction, redirect, useLoaderData} from "remix";
+import {getSession} from "~/sessions";
 
-export const loader = async () => {
+export const loader: LoaderFunction = async ({request}) => {
+    const session = await getSession(request.headers.get('Cookie'))
+    if (!session.has('userID')) return redirect('/login')
     const count = await db.joke.count();
     const randomNumber = Math.floor(Math.random() * count);
     const [joke] = await db.joke.findMany({
@@ -14,9 +17,6 @@ export const loader = async () => {
     });
 }
 
-export function newFunction() {
-    console.log('Hello world+')
-}
 
 export default function Index() {
     const data = useLoaderData();

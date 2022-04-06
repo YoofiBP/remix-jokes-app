@@ -1,9 +1,8 @@
 import loginStyle from '~/styles/login.css';
 import {useSearchParams, Link} from '@remix-run/react';
 import {ActionFunction, json, redirect, useActionData} from "remix";
-import {db} from "~/utils/db.server";
-import invariant from "tiny-invariant";
-import bcrypt from 'bcryptjs';
+import {createUserSession, login, register} from "~/utils/session.server";
+import {commitSession, getSession} from "~/sessions";
 
 export const links = () => [
     {
@@ -12,36 +11,52 @@ export const links = () => [
     }
 ]
 
+const buildErrorResponse = (error: { [key: string]: string }) => {
+    return {
+        ...error,
+        status: 400
+    }
+}
+
 export const action: ActionFunction = async ({request}) => {
+    const session = await getSession(request.headers.get('Cookie'));
     const formData = await request.formData();
     const loginType = formData.get('loginType')
     const username = formData.get('username')?.toString();
     const password = formData.get('password')?.toString();
 
+    if (typeof username !== 'string' || typeof password != 'string' || !username || !password) {
+        return json(buildErrorResponse({
+            error: 'Invalid credentials'
+        }))
+    }
+
 
     if (loginType === 'register') {
-        const user = await db.user.findUnique({
-            where: {
-                username
-            }
-        })
-        if (user) {
+        const registrationSuccessful = await register(username, password);
+        if (!registrationSuccessful) {
             return json({
                 error: 'User already exists'
             })
         }
 
-        invariant(typeof username === 'string' && typeof password === 'string');
-        const passwordHash = await bcrypt.hash(password, 10);
-        const newUser = await db.user.create({
-            data: {
-                username,
-                passwordHash
-            }
-        })
-        console.log(newUser)
-        return redirect('/jokes')
+
+    } else if (loginType === 'login') {
+
+        const user = await login(username, password)
+        if (!user) {
+            return json(buildErrorResponse({
+                error: 'Invalid credentials'
+            }))
+        }
+
+        return createUserSession(user.id, '/jokes');
     }
+    return redirect('/jokes', {
+        headers: {
+            'Set-Cookie': await commitSession(session)
+        }
+    })
 }
 
 export default function LoginPage() {
