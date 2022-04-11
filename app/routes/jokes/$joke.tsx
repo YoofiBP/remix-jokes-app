@@ -1,4 +1,4 @@
-import {json, LoaderFunction, useLoaderData} from "remix";
+import {json, LoaderFunction, useCatch, useLoaderData, useParams} from "remix";
 import invariant from "tiny-invariant";
 import {db} from "~/utils/db.server";
 import {Joke} from "@prisma/client";
@@ -16,11 +16,14 @@ export const loader: LoaderFunction = async ({params}) => {
         },
         select: {content: true, name: true}
     })
-    if (!joke) throw new Error('Joke not found')
+    if (!joke) throw new Response('Joke not found', {
+        status: 404
+    })
     return json({joke})
 }
 
 export default function JokeById() {
+
     const data = useLoaderData<LoaderData>();
 
     return (
@@ -31,5 +34,26 @@ export default function JokeById() {
             </p>
             <p>By: {data.joke.name}</p>
         </div>
+    )
+}
+
+export function CatchBoundary() {
+    const caught = useCatch();
+    const params = useParams();
+    if (caught.status === 404) {
+        return (
+            <div className="error-container">
+                Huh? What the heck is "{params.joke}"?
+            </div>
+        );
+    }
+    throw new Error(`Unhandled error: ${caught.status}`)
+}
+
+export function ErrorBoundary() {
+    const {joke} = useParams();
+    return (
+        <div className="error-container">{`There was an error loading joke by the id ${joke}. Sorry.`}</div>
+
     )
 }

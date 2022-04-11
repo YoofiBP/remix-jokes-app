@@ -33,14 +33,14 @@ export const action: ActionFunction = async ({request}) => {
 
 
     if (loginType === 'register') {
-        const registrationSuccessful = await register(username, password);
-        if (!registrationSuccessful) {
+        const user = await register(username, password);
+        if (!user) {
             return json({
                 error: 'User already exists'
             })
         }
 
-
+        return createUserSession(user.id, '/jokes');
     } else if (loginType === 'login') {
 
         const user = await login(username, password)

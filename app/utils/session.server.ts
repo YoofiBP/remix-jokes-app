@@ -1,6 +1,6 @@
 import {db} from "~/utils/db.server";
 import bcrypt from 'bcryptjs';
-import {commitSession, getSession} from "~/sessions";
+import {commitSession, destroySession, getSession} from "~/sessions";
 import {redirect} from "remix";
 
 export const login = async (username: string, password: string) => {
@@ -15,6 +15,16 @@ export const login = async (username: string, password: string) => {
     if (!await bcrypt.compare(password, user.passwordHash)) return null;
 
     return user;
+}
+
+export const logout = async (request: Request) => {
+    const session = await getUserSession(request);
+
+    return redirect('/login', {
+        headers: {
+            'Set-Cookie': await destroySession(session)
+        }
+    })
 }
 
 export const register = async (username: string, password: string) => {
@@ -60,13 +70,33 @@ const getUserID = async (request: Request) => {
     return userID;
 }
 
-const requireUserID = async (request: Request, redirectTo: string) => {
+export const requireUserID = async (request: Request, redirectTo: string = new URL(request.url).pathname) => {
     const userID = await getUserID(request);
     if (!userID) {
         const searchParams = new URLSearchParams([
             ["redirectTo", redirectTo]
         ])
-        return redirect(`/login${searchParams}`)
+        throw redirect(`/login?${searchParams}`)
     }
     return userID;
 }
+
+export const getUser = async (request: Request) => {
+    const userID = await getUserID(request);
+
+    if (typeof userID !== 'string') return null;
+
+    try {
+        return await db.user.findUnique({
+            where: {
+                id: userID
+            },
+            select: {id: true, username: true}
+        })
+
+    } catch (e) {
+        throw logout(request)
+    }
+
+}
+

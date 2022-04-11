@@ -1,8 +1,21 @@
-import {ActionFunction, json, redirect, useActionData} from "remix";
+import {ActionFunction, json, LoaderFunction, redirect, useActionData, useCatch} from "remix";
 import {db} from "~/utils/db.server";
-import React, {ReactEventHandler} from "react";
+import React from "react";
+import {getUser, requireUserID} from "~/utils/session.server";
+import {Link} from "@remix-run/react";
+
+export const loader: LoaderFunction = async ({request}) => {
+    const userID = await getUser(request);
+    if (!userID) {
+        throw new Response('Unauthenticated', {
+            status: 401
+        })
+    }
+    return json({})
+}
 
 export const action: ActionFunction = async ({request}) => {
+    const userID = await requireUserID(request)
     const formData = await request.formData();
 
     const name = formData.get('name')?.toString();
@@ -34,7 +47,8 @@ export const action: ActionFunction = async ({request}) => {
     const newJoke = await db.joke.create({
         data: {
             name,
-            content
+            content,
+            jokesterId: userID
         }
     })
 
@@ -44,16 +58,12 @@ export const action: ActionFunction = async ({request}) => {
 export default function NewJoke() {
     const errors = useActionData();
 
-    const handleChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
-        console.log(event.target.value)
-    }
-
     return (
         <form method={'post'}>
             <div>
                 <label htmlFor={'name'}>
                     Name: {" "}
-                    <input name={'name'} id={'name'} onChange={handleChange}/>
+                    <input name={'name'} id={'name'}/>
                 </label>
             </div>
             <div>
@@ -68,4 +78,26 @@ export default function NewJoke() {
             {errors && <p>{errors.error}</p>}
         </form>
     )
+}
+
+export function CatchBoundary() {
+    const caught = useCatch();
+    if (caught.status === 401) {
+        return (
+            <div className="error-container">
+                <p>You must be logged in to create a joke.</p>
+                <Link to="/login">Login</Link>
+            </div>
+        );
+    }
+
+    throw new Error(`Unhandled exception ${caught.status}`)
+}
+
+export function ErrorBoundary() {
+    return (
+        <div className="error-container">
+            Something unexpected went wrong. Sorry about that.
+        </div>
+    );
 }

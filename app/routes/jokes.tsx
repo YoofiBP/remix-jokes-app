@@ -4,24 +4,33 @@ import {Link} from "@remix-run/react";
 import {json, LoaderFunction, useLoaderData} from "remix";
 import {db} from "~/utils/db.server";
 import {z} from "zod";
+import {getUser} from "~/utils/session.server";
 
 const JokeData = z.object({
     name: z.string(),
     id: z.string(),
 })
 
+const User = z.object({
+    id: z.string(),
+    username: z.string(),
+})
+
 export type JokePayload = {
-    jokeListItems: z.infer<typeof JokeData>[]
+    jokeListItems: z.infer<typeof JokeData>[];
+    user: z.infer<typeof User>
 }
 
-export const loader: LoaderFunction = async () => {
+export const loader: LoaderFunction = async ({request}) => {
+    const user = await getUser(request);
     const jokes = await db.joke.findMany({
         take: 5,
         select: {name: true, id: true},
         orderBy: {createdAt: "desc"}
     });
     return json({
-        jokeListItems: jokes
+        jokeListItems: jokes,
+        user
     });
 }
 
@@ -36,6 +45,7 @@ export default function JokesRoute() {
     const data = useLoaderData<JokePayload>();
 
     JokeData.parse(data.jokeListItems[0])
+
     return (
         <div className="jokes-layout">
             <header className="jokes-header">
@@ -50,6 +60,18 @@ export default function JokesRoute() {
                             <span className="logo-medium">J🤪KES</span>
                         </Link>
                     </h1>
+                    {data.user ? (
+                        <div className="user-info">
+                            <span>{`Hi ${data.user.username}`}</span>
+                            <form action="/logout" method="post">
+                                <button type="submit" className="button">
+                                    Logout
+                                </button>
+                            </form>
+                        </div>
+                    ) : (
+                        <Link to="/login">Login</Link>
+                    )}
                 </div>
             </header>
             <main className="jokes-main">
